@@ -3,7 +3,7 @@ import scipy
 import matplotlib.pyplot as plt
 
 a = [13.00773,1.962079,0.444529,0.1219492]
-
+pi3halfs = (np.pi ) **(1.5)
 
 def psi_n(x,a):
     return np.exp(-a*x*x)
@@ -28,29 +28,21 @@ def kineticpsi(x,cvector):
 
 
 
-def construct_hamiltonian_matrix(x,h,a):
+def construct_hamiltonian_matrix(x,h,a,R):
     N = len(a)
     ham = np.zeros([N,N])
     overlap = np.zeros([N,N])
 
     for i in range(0,N):
         for j in range(i,N):
-            #basis1 = psi_n(x,a[i])
-            #basis2 = psi_n(x,a[j]) 
-
-            #minushalfsecondderivative = -1.0 * a[j] * (2.0*a[j]*x*x-3.0)*basis2*x*x
-            #psisq = basis1*basis2
-
-            #psi =  minushalfsecondderivative * basis1
-            #psi2 = - x*psisq
-            #psisq = x*x*psisq
+        
             kin = (3.0*(np.pi**1.5)*a[i]*a[j]/((a[i]+a[j])**2.5))
 
-            #print("expect kin:",kin,(3.0*(np.pi**1.5)*a[i]*a[j]/((a[i]+a[j])**2.5)))
-
-            #pot = integrate(psi2,h)
             pot = - 2.0*np.pi*1.0/(a[i]+a[j])
-            ham[i,j] = kin + pot
+            interaction = -pi3halfs / (R*(a[i]+a[j])**1.5)
+            interaction*= scipy.special.erf(R*((a[i]+a[j])**0.5))
+            #print("interaction",interaction)
+            ham[i,j] = kin + pot + interaction
             overlap[i,j] = (np.pi/(a[i]+a[j]))**1.5
     return ham ,overlap
 
@@ -72,29 +64,43 @@ def construct_overlap_matrix(x,h,N):
 def energy(ac):
     N = len(ac)
     #cvector = ac
-    cvector = ac[0:int(N/2)]
-    a = ac[int(N/2):]
+    R = ac[0]
+
+    N = (N-1)/2
+    cvector = ac[1:int((N+1))]
+    
+    a = ac[int((N+1)):]
     x,h = np.linspace(0.00,1000,100000,retstep=True)
-    ham,overlap = construct_hamiltonian_matrix(x,h,a)
+    ham,overlap = construct_hamiltonian_matrix(x,h,a,R)
     #overlap = construct_overlap_matrix(x,h,N)
     norm = 0.0
     energy = 0.0
     for i in range(0,len(cvector)):
         for j in range(i+1,len(cvector)):
             norm = norm + 2.0*cvector[i] * cvector[j]*overlap[i,j]
-            energy = energy + 2.0*cvector[i] * cvector[j] * ham[i,j]
+            energy = energy + 2.0*cvector[i] * cvector[j] * (ham[i,j]+ overlap[i,j]/R )
 
     for i in range(0,len(cvector)):
         norm = norm + cvector[i] * cvector[i]*overlap[i,i]
-        energy = energy + cvector[i] * cvector[i] * ham[i,i]
+        energy = energy + cvector[i] * cvector[i] * (ham[i,i]+ overlap[i,i]/R)
 
 
     energy = energy/norm
+    #print(energy)
     return energy 
 
-N = 12
-c = np.ones(N)
+smallN = 6
+c = np.ones(2*smallN+1)
 #c[int(N/2)] = 15.0#
+
+bounds = []
+bounds.append((0.0001,np.inf))
+for i in range(1,int(smallN+1)):
+    bounds.append((-np.inf,np.inf))
+for i in range(int(smallN+1),2*smallN+1):
+    bounds.append((0.01,np.inf))
+
+print((bounds))
 
 minimizer_kwargs = dict(method="L-BFGS-B")
 res = scipy.optimize.basinhopping(energy, c, minimizer_kwargs=minimizer_kwargs)
@@ -103,10 +109,10 @@ res = scipy.optimize.basinhopping(energy, c, minimizer_kwargs=minimizer_kwargs)
 C = res.x
 #print(res.x)
 print(energy(res.x))
-
-a = C[int(N/2):]
+print("R is ",C[0])
+a = C[int((smallN+1)):]
 a.sort()
-print(a)
+print("a is",a)
 x = np.linspace(0.0,10,400)
 wf = np.zeros(len(x))
 #for j in range(N):
